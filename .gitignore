@@ -1,3 +1,9 @@
+# Ignore data
+data/
+
+# Remove DS
+.DS_Store
+
 # History files
 .Rhistory
 .Rapp.history
