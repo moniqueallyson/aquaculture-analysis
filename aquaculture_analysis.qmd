@@ -1,0 +1,95 @@
+---
+title: "EDS 223 Assignment 2"
+subtitle: "Aquaculture Analysis"
+author: "Monique Hernandez"
+date: 11-07-2026
+execute:
+  eval: true
+  warning: false
+  message: false
+format: pdf
+---
+
+# Assignment Description
+
+Determine which Exclusive Economic Zone (EEZ) on the West Coast of the U.S. are best suited to developing marine aquaculture for several species of oysters and a species of your choice.
+
+Creating a function with the following: 
+
+- **arguments**
+    * min and max sea surface temp
+    * min and max depth
+    * species name
+- **species name**
+    *outputs:
+    * map of EEZ colored by the amount of suitable areas
+
+**Oysters** 
+    * sea surface temperature: 11-30°C
+    * depth: 0-70 meters below sea level
+**CHOOSE MY SPECIES**
+
+- get sea surface temp
+-get depth
+
+
+## Data Preparations
+```{r}
+library(tidyverse)
+library(sf)
+library(here)
+library(stars)
+library(tmap) 
+library(janitor) 
+library(terra)
+library(geodata)
+```
+
+```{r}
+# Read in data
+set_file <- c(
+    here('data/average_annual_sst_2008.tif'),
+    here('data/average_annual_sst_2009.tif'),
+    here('data/average_annual_sst_2010.tif'),
+    here('data/average_annual_sst_2011.tif'),
+    here('data/average_annual_sst_2012.tif')
+)
+
+sst_data <- rast(set_file)
+depth <- rast('data/depth.tif')
+eez_data <- st_read('data/wc_regions_clean.shp')
+```
+
+## Data Process
+```{r}
+# Check CRS match for all
+st_crs(sst_data) == st_crs(depth)
+st_crs(sst_data) == st_crs(eez_data)
+st_crs(eez_data) == st_crs(depth)
+```
+
+```{r}
+# Calculate average SST from 2008-2012
+sst_mean <- mean(sst_data, na.rm = TRUE)
+# Convert Kelvin to Celsius
+sst_cel <- sst_mean - 273.15
+# Crop data to match
+crop_depth <- crop(depth, sst_cel)
+```
+
+```{r}
+# Transfer sst ata using bilear method to match
+resampled_match <- resample(crop_depth, sst_cel, method = "bilinear")
+
+# Vverify matching of resoultion, origins, and extents for sst data and resampled
+cat("After resampling:\n")
+cat("Resolutions match:", all(res(resampled_match) == res(sst_cel)), "\n")
+cat("Origins match:    ", all(round(origin(resampled_match), 8) == round(origin(sst_cel), 8)), "\n")
+cat("Extents match:    ", ext(resampled_match) == ext(sst_cel), "\n")
+```
+
+## Find Suitable Locations
+
+```{r}
+
+```
