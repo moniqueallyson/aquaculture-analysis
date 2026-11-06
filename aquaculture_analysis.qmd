@@ -24,20 +24,22 @@ Creating a function with the following:
     * min and max sea surface temp
     * min and max depth
     * species name
+
 - **outputs:**
     * map of EEZ regions colored by amount of suitable area
 
 - **Species for this assignment:**
-    * oysters:
+    * Several oysters:
         * Sea surface temperature: 11-30°C
         * Depth: 0-70 meters below sea level
     * Blue mussel:
-        * Name: Adula californiensis: California datemussel (California datemussel)
-         * Sea surface temperature: 5-20°C
+        * Name: Mytilus edulis
+        * Sea surface temperature: 5-20°C
         * Depth: 0-60 m
 
 ## Data Preparations
 ```{r}
+# Load libraries
 library(tidyverse)
 library(sf)
 library(here)
@@ -61,75 +63,50 @@ set_file <- c(
 
 sst_data <- rast(set_file)
 
-# # Standardize SST CRS to WGS 84
-# terra::crs(sst_data) <- "EPSG:4326"
-
 depth <- rast('data/depth.tif')
+
 eez_data <- st_read('data/wc_regions_clean.shp')
 ```
 
 ## Data Process
 
 ```{r}
-# Match CRS and change shp
-sst_data <- project(sst_data, crs(depth))
-eez_data <- st_transform(eez_data, crs(depth))
-```
+# Calculate SST mean from 2008-2012 and convert Kelvin to Celsius
+sst_mean_c <- mean(sst_data, na.rm = TRUE) - 273.15
 
-```{r}
-#using sst_data as the targeted crs
-target_crs <- crs(sst_data)
-
-#transform the depth_data only if its CRS differs
-if (!isTRUE(st_crs(depth) == st_crs(target_crs))) {
-    depth <- project(depth, target_crs)
-}
-
-#transform the eez_data only if the CRS differs
-if (!isTRUE(st_crs(eez_data) == st_crs(target_crs))) {
-    eez_data <- st_transform(eez_data, target_crs)
-}
-```
-
-```{r, results = 'hide'}
-# Check CRS match for all
-st_crs(sst_data) == st_crs(depth)
-st_crs(sst_data) == st_crs(eez_data)
-st_crs(eez_data) == st_crs(depth)
-```
-
-```{r}
-# Calculate average SST from 2008-2012
-sst_mean <- mean(sst_data, na.rm = TRUE)
-
-# Convert Kelvin to Celsius
-sst_celsius <- sst_mean - 273.15
 # Crop data to match
-crop_depth <- crop(depth, sst_celsius)
+crop_depth <- crop(depth, sst_mean_c)
 
 # Transfer sst data using bilear method to match
-resampled_depth <- resample(crop_depth, sst_celsius, method = "bilinear")
+resampled_depth <- resample(crop_depth, sst_mean_c, method = "bilinear")
 ```
 
 ```{r, results = 'hide'}
-# Vverify matching of resoultion, origins, and extents for sst data and resampled
-cat("=== SST ===\n")
-cat("Resolution:", res(sst_data), "\n")
-cat("Extent:    "); print(ext(sst_data))
+# Verify resolution
+  # Checking and converting depth to match SST resolution, extent, and CRS
+  if (all(res(sst_mean_c) == res(resampled_depth))) {
+    print("Resolutions match!")
+  } else {
+    warning("Resolutions don't match!")
+    res(resampled_depth) <- res(sst_mean_c)
+  }
 
-cat("\n=== Depth Resample ===\n")
-cat("Resolution:", res(resampled_depth), "\n")
-cat("Extent:    "); print(ext(resampled_depth))
-
-cat("\n=== Same CRS? ===\n")
-cat("STT vs Depth Resample: ", same.crs(sst_data, crop_depth), "\n")
+  if (ext(sst_mean_c) == ext(resampled_depth)) {
+    print("Extents match!")
+  } else {
+    warning("Extent don't match!")
+    ext(resampled_depth) <- ext(sst_mean_c)
+  }
+# test if the plot CRS matches the Lidar CRS
+  if (crs(resampled_depth) == crs(sst_mean_c)) {
+    print("CRS match!")
+  } else {
+    warning("CRS don't match!")
+    crs(resampled_depth) <- crs(sst_mean_c)
+  }
 ```
 
-## Find Suitable Locations
-
-Find suitable zones for marine aquaculture.
-
-### Functions for oysters
+## Workflow for Oysters
 ```{r}
 # variables for mix and max
 min_sst_oyster <- 11
@@ -165,7 +142,7 @@ rcl_depth <- matrix(
 
 ```{r}
 #reclassify
-zone_sst <- classify(sst_celsius, rcl = rcl_sst)
+zone_sst <- classify(sst_mean_c, rcl = rcl_sst)
 
 zone_depth <- classify(resampled_depth, rcl = rcl_depth)
 
@@ -175,13 +152,11 @@ depth_sst_zones <- c(zone_sst, zone_depth)
 
 ```{r}
 # Find suitable zones for oysters
-oyster_suitable <- lapp(depth_sst_zones, fun = function(sst_data, depth_data) sst_data * depth_data)
+oyster_suitable <- lapp(depth_sst_zones, function(sst_data, depth_data) sst_data * depth_data)
 ```
 
-## Determine the most suitable EEZ 
-
 ```{r}
-# Matching CRS
+# Determine suitable areas within EEZ
 sf::st_crs(eez_data)<- terra::crs(oyster_suitable)
 ```
 
@@ -222,6 +197,7 @@ tm_shape(map_1) +
     )
 ```
 
+### Numerical Reprsentation
 ```{r}
 # Create a table for area by region and suitability
 map_1 |>
@@ -243,8 +219,7 @@ map_1 |>
   kable_styling(latex_options = c("striped", "hold_position"))
 ```
 
-### Function Creation
-
+## Function Creation for Suitable Locations in the West Coast
 
 ```{r}
 # Function creation
@@ -296,13 +271,19 @@ suitable_area_map <- function(min_sst, max_sst, min_depth, max_depth, species_na
 #             species_name = "Oysters")
 ```
 
-### Chosen Species Function
+## Utilize Function with Species: Oysters and Blue Mussel
 
 - ***Information:**
-    * Blue mussel:
-        * Name: Adula californiensis: California datemussel (California datemussel)
-         * Sea surface temperature: 5-20°C
-        * Depth: 0-60 m
+    * Species name = oysters
+        * min_sst = 11°C
+        * min_sst = 30°C
+        * min_depth = 0 meters
+        * max_depth = -70 meters
+    * Species name = blue mussel (Mytilus edulis):
+        * min_sst = 5°C
+        * min_sst = 20°C
+        * min_depth = 0 meters
+        * max_depth = -60 meters
 
 ```{r}
 
@@ -311,4 +292,6 @@ suitable_area_map <- function(min_sst, max_sst, min_depth, max_depth, species_na
 #             species_name = "Homarus Americanus")
 
 ```
+
+
 
