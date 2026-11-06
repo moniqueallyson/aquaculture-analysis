@@ -27,14 +27,14 @@ Creating a function with the following:
 - **outputs:**
     * map of EEZ regions colored by amount of suitable area
 
-Species for this assignment: 
-* oysters:
-    * Sea surface temperature: 11-30°C
-    * Depth: 0-70 meters below sea level
-* Blue mussel:
-    * Name: Adula californiensis: California datemussel (California datemussel)
-    * Sea surface temperature: 5-20°C
-    * Depth: 0-60 m
+- **Species for this assignment:**
+    * oysters:
+        * Sea surface temperature: 11-30°C
+        * Depth: 0-70 meters below sea level
+    * Blue mussel:
+        * Name: Adula californiensis: California datemussel (California datemussel)
+         * Sea surface temperature: 5-20°C
+        * Depth: 0-60 m
 
 ## Data Preparations
 ```{r}
@@ -49,7 +49,7 @@ library(geodata)
 library(kableExtra)
 ```
 
-```{r}
+```{r, results = 'hide'}
 # Read in data
 set_file <- c(
     here('data/average_annual_sst_2008.tif'),
@@ -91,7 +91,7 @@ if (!isTRUE(st_crs(eez_data) == st_crs(target_crs))) {
 }
 ```
 
-```{r}
+```{r, results = 'hide'}
 # Check CRS match for all
 st_crs(sst_data) == st_crs(depth)
 st_crs(sst_data) == st_crs(eez_data)
@@ -102,9 +102,6 @@ st_crs(eez_data) == st_crs(depth)
 # Calculate average SST from 2008-2012
 sst_mean <- mean(sst_data, na.rm = TRUE)
 
-# Visual
-plot(sst_mean)
-
 # Convert Kelvin to Celsius
 sst_celsius <- sst_mean - 273.15
 # Crop data to match
@@ -114,7 +111,7 @@ crop_depth <- crop(depth, sst_celsius)
 resampled_depth <- resample(crop_depth, sst_celsius, method = "bilinear")
 ```
 
-```{r}
+```{r, results = 'hide'}
 # Vverify matching of resoultion, origins, and extents for sst data and resampled
 cat("=== SST ===\n")
 cat("Resolution:", res(sst_data), "\n")
@@ -126,11 +123,6 @@ cat("Extent:    "); print(ext(resampled_depth))
 
 cat("\n=== Same CRS? ===\n")
 cat("STT vs Depth Resample: ", same.crs(sst_data, crop_depth), "\n")
-```
-
-```{r}
-# Visualize for verificiation
-plot(resampled_depth)
 ```
 
 ## Find Suitable Locations
@@ -184,9 +176,6 @@ depth_sst_zones <- c(zone_sst, zone_depth)
 ```{r}
 # Find suitable zones for oysters
 oyster_suitable <- lapp(depth_sst_zones, fun = function(sst_data, depth_data) sst_data * depth_data)
-
-#lets visualize
-plot(oyster_suitable)
 ```
 
 ## Determine the most suitable EEZ 
@@ -199,32 +188,21 @@ sf::st_crs(eez_data)<- terra::crs(oyster_suitable)
 ```{r}
 # Convert to raster
 eez_raster <- rasterize(eez_data, oyster_suitable, field = "rgn_id")
-
-#check it out
-plot(eez_raster)
 ```
 
 ```{r}
 # Calculate cell size
 cell_size <- cellSize(oyster_suitable, unit = "km", mask = TRUE)
-
-plot(cell_size)
 ```
 
 ```{r}
 #keep cell area only where suitable areas equals 1
 suitable_zmask <- mask(cell_size,oyster_suitable, maskvalues = 0)
-
-#visualize
-plot(suitable_zmask)
 ```
 
 ```{r}
 # use zonal function to sum masked result and eez raster
 desired_zone <- zonal(suitable_zmask,eez_raster, fun = 'sum', na.rm = TRUE)
-
-#visual
-plot(desired_zone)
 ```
 
 ```{r}
@@ -310,102 +288,27 @@ suitable_area_map <- function(min_sst, max_sst, min_depth, max_depth, species_na
 
 ```
 
-
-### Species Function 
+### Oyster Species Function 
 
 ```{r}
-(min_sst = 11, max_sst = 30,
-            min_depth = -70, max_depth = 0,
-            species_name = "Oysters")
+# (min_sst = 11, max_sst = 30,
+#             min_depth = -70, max_depth = 0,
+#             species_name = "Oysters")
 ```
 
 ### Chosen Species Function
 
-```{r}
-
-Species_EEZ(min_sst = 4, max_sst = 50,
-            mini_depth = 0, maximum_depth = 480,
-            species_name = "Homarus Americanus")
-
-```
-
-
-
-
-
-
-
-
-### Function for blue mussels
-```{r}
-# variables for mix and max
-min_sst_mussel <- 5
-max_sst_mussel <- 20
-
-# Reclassifying SST and depth data into suitable locations
-# # SST reclassification matrix
-  rcl_sst_mussel <- matrix(
-    c(
-      -Inf, min_sst_mussel, 0,
-      min_sst_mussel, max_sst_mussel, 1,
-      max_sst_mussel, Inf, 0
-    ),
-    ncol = 3,
-    byrow = TRUE
-  )
-
-  # Reclassifying sst
-  sst_zones_mussel <- classify(sst_celsius, rcl = rcl_sst_mussel)
-
-max_depth_mussel <- 0
-min_depth_mussel <- 60
-
-  # Depth reclassification matrix
-  rcl_depth_mussel <- matrix(
-    c(
-      -Inf, max_depth_mussel, 0, # should max_depth be negative?
-      max_depth_mussel, min_depth_mussel, 1,
-      min_depth_mussel, Inf, 0
-    ),
-    ncol = 3,
-    byrow = TRUE
-  )
-
-  # Reclassifying depth
-  depth_zones_mussel <- classify(resampled_depth, rcl = rcl_depth)
-```
+- ***Information:**
+    * Blue mussel:
+        * Name: Adula californiensis: California datemussel (California datemussel)
+         * Sea surface temperature: 5-20°C
+        * Depth: 0-60 m
 
 ```{r}
-# Finding suitable locations for mussel
-mussel_suitable <- terra::lapp(c(depth_zones_mussel, sst_zones_mussel), fun = depth_sst_fun)
+
+# Species_EEZ(min_sst = 4, max_sst = 50,
+#             mini_depth = 0, maximum_depth = 480,
+#             species_name = "Homarus Americanus")
+
 ```
-```{r}
-mussel <- lapp(c(depth_zones_mussel, sst_zones_mussel), fun = depth_sst_fun)
-```
-
-## Plot
-
-
-```{r}
-mussel <- lapp(c(depth_zones_mussel, sst_zones_mussel), fun = depth_sst_fun)
-```
-
-```{r}
-# Oyster map
-tm_shape(oyster_suitable) +
-  tm_raster(col.legend = tm_legend("Oysters")) +
-  tm_shape(eez_data) +
-  tm_borders(col = "black")
-```
-
-```{r}
-# Mussel map
-tm_shape(mussel_suitable) +
-  tm_raster(col.legend = tm_legend("Mussel")) +
-  tm_shape(eez_data) +
-  tm_borders(col = "black")
-```
-
-
-
 
