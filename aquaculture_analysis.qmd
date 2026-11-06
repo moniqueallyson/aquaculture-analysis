@@ -16,26 +16,18 @@ Marine aquaculture can be a more sustainable option than the alternative land-ba
 
 # Assignment Description
 
-Determine which Exclusive Economic Zone (EEZ) on the West Coast of the U.S. are best suited to developing marine aquaculture for several species of oysters and a species of your choice.
+For this assignment, the Exclusive Economic Zone (EEZ) will be used to determine suitable regions throughout the west coast to develop marine aquaculture for several oyster species, as well as a species of choice, which was chosen to be the blue mussel (*Mytilus edulis*).
 
-Creating a function with the following: 
+The main goal is to create a function that will input the following: minimum and maximum sea surface temp, minimum and maximum depth, and the species name. The output will be a map of the EEZ regions colored by the amount of suitable areas for the selected species.
 
-- **arguments:**
-    * min and max sea surface temp
-    * min and max depth
-    * species name
-
-- **outputs:**
-    * map of EEZ regions colored by amount of suitable area
-
-- **Species for this assignment:**
-    * Several oysters:
-        * Sea surface temperature: 11-30°C
-        * Depth: 0-70 meters below sea level
-    * Blue mussel:
-        * Name: Mytilus edulis
-        * Sea surface temperature: 5-20°C
-        * Depth: 0-60 m
+For the oysters, the information is the following:
+- * Oysters:
+    * Sea surface temperature: 11-30°C
+    * Depth: 0-70 meters below sea level
+- * Blue mussel:
+    * Name: *Mytilus edulis*
+    * Sea surface temperature: 5-20°C
+    * Depth: 0-60 m
 
 ## Data Preparations
 ```{r}
