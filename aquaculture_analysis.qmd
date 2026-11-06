@@ -21,10 +21,11 @@ For this assignment, the Exclusive Economic Zone (EEZ) will be used to determine
 The main goal is to create a function that will input the following: minimum and maximum sea surface temp, minimum and maximum depth, and the species name. The output will be a map of the EEZ regions colored by the amount of suitable areas for the selected species.
 
 For the oysters, the information is the following:
-- * Oysters:
+
+- **Oysters:**
     * Sea surface temperature: 11-30°C
     * Depth: 0-70 meters below sea level
-- * Blue mussel:
+- **Blue mussel:**
     * Name: *Mytilus edulis*
     * Sea surface temperature: 5-20°C
     * Depth: 0-60 m
@@ -211,82 +212,7 @@ map_1 |>
   kable_styling(latex_options = c("striped", "hold_position"))
 ```
 
-## Creat Function: Find Suitable Locations for Species in the West Coast
-
-```{r}
-# Function creation
-suitable_area_map <- function(
-    min_sst,
-    max_sst,
-    min_depth,
-    max_depth,
-    species_name) {
-# Range for temperature and depth
-    rcl_sst <- matrix(c(
-    -Inf, min_sst, 0,
-    min_sst, max_sst, 1,
-    max_sst, Inf, 0),
-    ncol = 3, byrow = TRUE)
-
-# Reclassify raster
-    sst_zone <- classify(sst_mean_c, rcl = rcl_sst)
-
-# Reclassify temperature
-    rcl_depth <- matrix(c(-Inf, max_depth, 0,
-                    max_depth, min_depth, 1,
-                    min_depth, Inf, 0),
-                ncol = 3, byrow = TRUE)
-
-# Reclassify depth
-    depth_zone <- classify(resampled_depth, rcl = rcl_depth)
-
-
-    sst_depth <- c(sst_zone, depth_zone)
-
-    suitable_zones <- lapp(sst_depth, fun = function(sst_data, depth) sst_data * depth)
-
-# Match CRS of eez_data to oyster_suitable 
-    sf::st_crs(eez_data)<- terra::crs(suitable_zones)
-
-# Converting sf object to terra SpatVector
-    eez_vect <- terra::vect(eez_data)
-
-    eez_raster <- rasterize(eez_vect, suitable_zones, field = 'rgn_id')
-
-    cellsize <- cellSize(suitable_zones, unit = "km", mask = TRUE)
-
-    suitable_area <- mask(cellsize, suitable_zones, maskvalues = 0)
-
-    zone <- zonal(suitable_area, eez_raster, fun = "sum", na.rm = TRUE)
-
-    zone_tibble <- as_tibble(zone)
-
-    eez_map <- left_join(eez_data,zone_tibble, by= 'rgn_id')
-
-    tm_shape(eez_map) +
-        tm_basemap("OpenStreetMap") +
-        tm_fill(
-            fill = 'area',
-            fill.legend = tm_legend(
-                title = "Suitable Area (km^2)"
-            )) +
-            tmap_options(component.autoscale = FALSE) +
-            tm_borders(lwd = 8) +
-            tm_title(
-                paste(
-                "Suitable",
-                species_name,
-                "Area by Exclusive Economic Zone (EEZ) in the West Coast"
-                ),
-                size = 1
-                ) +
-            tm_scalebar(text.size = .5, position = c("botton", "left")) +
-            tm_compass(position = c("top", "right"))
-}
-
-```
-
-## Utilize Function for Species: Oysters and Blue Mussel
+## Creat Function to Find Suitable Locations within EEZ West Coast Regions
 
 ```{r}
 eez_species <- function(
@@ -350,42 +276,58 @@ eez_species <- function(
     z_tibble <- as_tibble(desired_zone)
     
     
-    map_1 <- left_join(eez_data, z_tibble, by = "rgn_id")
+    map <- left_join(eez_data, z_tibble, by = "rgn_id")
     
 # Visualize EEZ
-    tm_shape(map_1) +
+    tm_shape(map) +
         tm_basemap("OpenStreetMap") +
         tm_fill(
             fill = "area",
-            fill.legend = tm_legend(title = "Suitable Area")
-            )
+            fill.legend = tm_legend(title = "Suitable Area (km^2)")
+            ) +
+                tm_borders() +
+                tmap_options(component.autoscale = FALSE) +
+                tm_title(
+                 paste(
+                "Suitable",
+                species_name,
+                "Area by Exclusive Economic Zone (EEZ)"    
+                ))
 }
 ```
 
-### Use EEZ Species Function for Desired Species
+### EEZ Species Function: Finding Suitable Marine Aquaculture for Given Species
 
-- *** Species Information:**
-    * Species name = oysters
-        * min_sst = 11°C
-        * min_sst = 30°C
-        * min_depth = 0 meters
-        * max_depth = -70 meters
+Utilizing the function created above, the map can be easily recreated for the desired blue mussel rather than recreate the lengthy process of manually inputing the inforamtion for sea surface temperature and depth, which leads to the reproduction of matching crs, masking, and more.
 
-    * Species name = blue mussel (Mytilus edulis):
-        * min_sst = 5°C
-        * min_sst = 20°C
-        * min_depth = 0 meters
-        * max_depth = -60 meters
+The function is called after EEZ species and used as:
+
+- `eez_species(min_sst, max_sst, min_depth, max_depth, species_name)`
+
+Simply Input into the funtion:
+
+- Oysters:
+    * min_sst = 11°C
+    * min_sst = 30°C
+    * min_depth = 0 meters
+    * max_depth = -70 meters
+    * Species_name = Oysters
+- Blue mussels:
+    * min_sst = 5°C
+    * min_sst = 20°C
+    * min_depth = 0 meters
+    * max_depth = -60 meter
+    * species_name = Blue Mussel
 
 - Output: 
     * map of EEZ regions colored by amount of suitable area
 
 ```{r}
 # Create a suitable EEZ map for oysters using function
-eez_species(11, 30, 0, -70, 'oyster')
+eez_species(11, 30, 0, -70, 'Oysters')
 ```
 
 ```{r}
 # Create a suitable EEZ map for mussles using function
-eez_species(5, 20, 0, -60, 'mussel')
+eez_species(5, 20, 0, -60, 'Blue Mussel')
 ```
