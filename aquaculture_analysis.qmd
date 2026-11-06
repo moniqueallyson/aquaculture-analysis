@@ -97,7 +97,7 @@ resampled_depth <- resample(crop_depth, sst_mean_c, method = "bilinear")
     warning("Extent don't match!")
     ext(resampled_depth) <- ext(sst_mean_c)
   }
-# test if the plot CRS matches the Lidar CRS
+# test if the resampled depth CRS matches the sst_mean_c CRS
   if (crs(resampled_depth) == crs(sst_mean_c)) {
     print("CRS match!")
   } else {
@@ -109,31 +109,31 @@ resampled_depth <- resample(crop_depth, sst_mean_c, method = "bilinear")
 ## Workflow for Oysters
 ```{r}
 # variables for mix and max
-min_sst_oyster <- 11
-max_sst_oyster <- 30
+min_sst <- 11
+max_sst <- 30
 
 
 # Reclassifying SST and depth data into suitable locations
-# # SST reclassification matrix
+# SST reclassification matrix
   rcl_sst <- matrix(
     c(
-      -Inf, min_sst_oyster, 0,
-      min_sst_oyster, max_sst_oyster, 1,
-      max_sst_oyster, Inf, 0
+      -Inf, min_sst, 0,
+      min_sst, max_sst, 1,
+      max_sst, Inf, 0
     ),
     ncol = 3,
     byrow = TRUE
   )
 
-min_depth_oyster <- 0
-max_depth_oyster <- -70
+min_depth <- 0
+max_depth <- -70
 
 # Depth reclassification matrix
 rcl_depth <- matrix(
     c(
-      -Inf, max_depth_oyster, 0, # should max_depth be negative?
-      max_depth_oyster, min_depth_oyster, 1,
-      min_depth_oyster, Inf, 0
+      -Inf, max_depth, 0, # should max_depth be negative?
+      max_depth, min_depth, 1,
+      min_depth, Inf, 0
     ),
     ncol = 3,
     byrow = TRUE
@@ -141,7 +141,7 @@ rcl_depth <- matrix(
 ```
 
 ```{r}
-#reclassify
+# reclassify
 zone_sst <- classify(sst_mean_c, rcl = rcl_sst)
 
 zone_depth <- classify(resampled_depth, rcl = rcl_depth)
@@ -152,27 +152,27 @@ depth_sst_zones <- c(zone_sst, zone_depth)
 
 ```{r}
 # Find suitable zones for oysters
-oyster_suitable <- lapp(depth_sst_zones, function(sst_data, depth_data) sst_data * depth_data)
+suitable_zones <- lapp(depth_sst_zones, function(sst_data, depth_data) sst_data * depth_data)
 ```
 
 ```{r}
 # Determine suitable areas within EEZ
-sf::st_crs(eez_data)<- terra::crs(oyster_suitable)
+sf::st_crs(eez_data)<- terra::crs(suitable_zones)
 ```
 
 ```{r}
 # Convert to raster
-eez_raster <- rasterize(eez_data, oyster_suitable, field = "rgn_id")
+eez_raster <- rasterize(eez_data, suitable_zones, field = "rgn_id")
 ```
 
 ```{r}
 # Calculate cell size
-cell_size <- cellSize(oyster_suitable, unit = "km", mask = TRUE)
+cell_size <- cellSize(suitable_zones, unit = "km", mask = TRUE)
 ```
 
 ```{r}
-#keep cell area only where suitable areas equals 1
-suitable_zmask <- mask(cell_size,oyster_suitable, maskvalues = 0)
+# keep cell area only where suitable areas equals 1
+suitable_zmask <- mask(cell_size,suitable_zones, maskvalues = 0)
 ```
 
 ```{r}
@@ -181,7 +181,7 @@ desired_zone <- zonal(suitable_zmask,eez_raster, fun = 'sum', na.rm = TRUE)
 ```
 
 ```{r}
-#use tibble()
+# use tibble()
 z_tibble <- as_tibble(desired_zone)
 
 map_1 <- left_join(eez_data, z_tibble, by = "rgn_id")
@@ -197,7 +197,7 @@ tm_shape(map_1) +
     )
 ```
 
-### Numerical Reprsentation
+### Numerical Oyster Reprsentation by Exclusive Economic Zone
 ```{r}
 # Create a table for area by region and suitability
 map_1 |>
@@ -209,89 +209,191 @@ map_1 |>
     digits = 1,
     col.names = c(
       "EEZ Region",
-      "Suitable Area (km²)",
+      " Suitable Area (km²)",
       "Total EEZ Area (km²)",
       "Suitable (%)"
     ),
-    caption = "Suitable oyster aquaculture area by West Coast EEZ",
+    caption = "Oyster Aquaculture by Exclusive Economic Zone (EEZ) in the West Coast",
     booktabs = TRUE
   ) |>
   kable_styling(latex_options = c("striped", "hold_position"))
 ```
 
-## Function Creation for Suitable Locations in the West Coast
+## Creat Function: Find Suitable Locations for Species in the West Coast
 
 ```{r}
 # Function creation
-suitable_area_map <- function(min_sst, max_sst, min_depth, max_depth, species_name) {
+suitable_area_map <- function(
+    min_sst,
+    max_sst,
+    min_depth,
+    max_depth,
+    species_name) {
 # Range for temperature and depth
-  zone_sst <- matrix(c(
+    rcl_sst <- matrix(c(
     -Inf, min_sst, 0,
     min_sst, max_sst, 1,
     max_sst, Inf, 0),
     ncol = 3, byrow = TRUE)
 
 # Reclassify raster
-    sst_rcl <- terra::classify(sst_data, rcl = rcl_sst)
+    sst_zone <- classify(sst_mean_c, rcl = rcl_sst)
 
 # Reclassify temperature
-    rcl_depth <- matrix(c(-Inf, min_depth, 0,
-                    min_depth, max_depth, 1,
-                    max_depth, Inf, 0),
+    rcl_depth <- matrix(c(-Inf, max_depth, 0,
+                    max_depth, min_depth, 1,
+                    min_depth, Inf, 0),
                 ncol = 3, byrow = TRUE)
 
 # Reclassify depth
-    depth_rcl <- terra::classify(resampled_depth, rcl = rcl_depth)
+    depth_zone <- classify(resampled_depth, rcl = rcl_depth)
 
 
-    combined <- c(sst_rcl, depth_rcl)
+    sst_depth <- c(sst_zone, depth_zone)
 
-    suitable_zones <- lapp(combined, fun = function(sst_data, depth) sst_data * depth)
+    suitable_zones <- lapp(sst_depth, fun = function(sst_data, depth) sst_data * depth)
 
-    eez_raster <- rasterize(eez_data, suitable_zones, field = 'rgn_id')
+# Match CRS of eez_data to oyster_suitable 
+    sf::st_crs(eez_data)<- terra::crs(suitable_zones)
 
-    suitable_cellsize <- cellSize(suitable_zones, unit = "km", mask = TRUE)
+# Converting sf object to terra SpatVector
+    eez_vect <- terra::vect(eez_data)
 
-    suitable_zone_mask <- mask(suitable_cellsize, suitable_zones, maskvalues = 0)
+    eez_raster <- rasterize(eez_vect, suitable_zones, field = 'rgn_id')
 
-    zone <- zonal(suitable_zone_mask, eez_raster, fun = "sum", na.rm = TRUE)
+    cellsize <- cellSize(suitable_zones, unit = "km", mask = TRUE)
+
+    suitable_area <- mask(cellsize, suitable_zones, maskvalues = 0)
+
+    zone <- zonal(suitable_area, eez_raster, fun = "sum", na.rm = TRUE)
 
     zone_tibble <- as_tibble(zone)
 
     eez_map <- left_join(eez_data,zone_tibble, by= 'rgn_id')
+
+    tm_shape(eez_map) +
+        tm_basemap("OpenStreetMap") +
+        tm_fill(
+            fill = 'area',
+            fill.legend = tm_legend(
+                title = "Suitable Area (km^2)"
+            )) +
+            tmap_options(component.autoscale = FALSE) +
+            tm_borders(lwd = 8) +
+            tm_title(
+                paste(
+                "Suitable",
+                species_name,
+                "Area by Exclusive Economic Zone (EEZ) in the West Coast"
+                ),
+                size = 1
+                ) +
+            tm_scalebar(text.size = .5, position = c("botton", "left")) +
+            tm_compass(position = c("top", "right"))
 }
 
 ```
 
-### Oyster Species Function 
+## Utilize Function for Species: Oysters and Blue Mussel
 
 ```{r}
-# (min_sst = 11, max_sst = 30,
-#             min_depth = -70, max_depth = 0,
-#             species_name = "Oysters")
+eez_species <- function(
+    min_sst,
+    max_sst,
+    min_depth,
+    max_depth,
+    species_name
+){
+# SST matrix reclassification
+    rcl_sst <- matrix(
+    c(
+      -Inf, min_sst, 0,
+      min_sst, max_sst, 1,
+      max_sst, Inf, 0
+    ),
+    ncol = 3,
+    byrow = TRUE
+    )
+
+# reclassify
+    zone_sst <- classify(sst_mean_c, rcl = rcl_sst)
+    
+# Depth reclassification matrix
+    rcl_depth <- matrix(
+    c(
+      -Inf, max_depth, 0,
+      max_depth, min_depth, 1,
+      min_depth, Inf, 0
+    ),
+    ncol = 3,
+    byrow = TRUE
+    )
+
+    zone_depth <- classify(resampled_depth, rcl = rcl_depth)
+
+# Combine the two zones together 
+    depth_sst_zones <- c(zone_sst, zone_depth)
+    
+# Find suitable zones
+    suitable_zones <- lapp(depth_sst_zones, function(sst_data, depth_data) sst_data * depth_data)
+    
+# Determine suitable zones inside EEZ
+    sf::st_crs(eez_data)<- terra::crs(suitable_zones)
+    
+# Convert to raster
+    eez_raster <- rasterize(eez_data, suitable_zones, field = "rgn_id")
+    
+# Calculate cell size
+    cell_size <- cellSize(suitable_zones, unit = "km", mask = TRUE)
+    
+# Keep cell area only where suitable areas equals 1
+
+    suitable_zmask <- mask(cell_size,suitable_zones, maskvalues = 0)
+    
+# Use zonal function to sum masked result and eez raster
+
+    desired_zone <- zonal(suitable_zmask,eez_raster, fun = 'sum', na.rm = TRUE)
+    
+# use tibble()
+    z_tibble <- as_tibble(desired_zone)
+    
+    
+    map_1 <- left_join(eez_data, z_tibble, by = "rgn_id")
+    
+# Visualize EEZ
+    tm_shape(map_1) +
+        tm_basemap("OpenStreetMap") +
+        tm_fill(
+            fill = "area",
+            fill.legend = tm_legend(title = "Suitable Area")
+            )
+}
 ```
 
-## Utilize Function with Species: Oysters and Blue Mussel
+### Use EEZ Species Function for Desired Species
 
-- ***Information:**
+- *** Species Information:**
     * Species name = oysters
         * min_sst = 11°C
         * min_sst = 30°C
         * min_depth = 0 meters
         * max_depth = -70 meters
+
     * Species name = blue mussel (Mytilus edulis):
         * min_sst = 5°C
         * min_sst = 20°C
         * min_depth = 0 meters
         * max_depth = -60 meters
 
+- Output: 
+    * map of EEZ regions colored by amount of suitable area
+
 ```{r}
-
-# Species_EEZ(min_sst = 4, max_sst = 50,
-#             mini_depth = 0, maximum_depth = 480,
-#             species_name = "Homarus Americanus")
-
+# Create a suitable EEZ map for oysters using function
+eez_species(11, 30, 0, -70, 'oyster')
 ```
 
-
-
+```{r}
+# Create a suitable EEZ map for mussles using function
+eez_species(5, 20, 0, -60, 'mussel')
+```
