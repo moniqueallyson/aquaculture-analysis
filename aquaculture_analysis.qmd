@@ -1,6 +1,6 @@
 ---
-title: "EDS 223 Assignment 2"
-subtitle: "Aquaculture Analysis"
+title: "Aquaculture Analysis"
+subtitle: "EDS 223: Assignment 3"
 author: "Monique Hernandez"
 date: 11-07-2026
 execute:
@@ -12,7 +12,7 @@ format: pdf
 
 # Background
 
-Marine aquaculture can be a more sustainable option than the alternative land-based meat for the global food supply (Hall et al, 2011). Gentry et al. created a map based on the neccessay constraints for marine aquaculture including, ship traffics, dissolved oxygen, and bottom depth, concluding that the global seafood demand could be met with less than 0.015% of the global ocean area.
+Marine aquaculture have the potential to be a more sustainable option than the alternative land-based meat for the global food supply (Hall et al, 2011). Gentry et al. created a map based on the neccessay constraints for marine aquaculture including, ship traffics, dissolved oxygen, and bottom depth, concluding that the global seafood demand could be met with less than 0.015% of the global ocean area.
 
 # Assignment Description
 
@@ -45,7 +45,7 @@ library(kableExtra)
 ```
 
 ```{r, results = 'hide'}
-# Read in data
+# Read in data for the average SST
 set_file <- c(
     here('data/average_annual_sst_2008.tif'),
     here('data/average_annual_sst_2009.tif'),
@@ -54,10 +54,13 @@ set_file <- c(
     here('data/average_annual_sst_2012.tif')
 )
 
+# File path for SST data stack
 sst_data <- rast(set_file)
 
+# Load bathymetry data
 depth <- rast('data/depth.tif')
 
+# Load West Coast EEZ 
 eez_data <- st_read('data/wc_regions_clean.shp')
 ```
 
@@ -101,10 +104,9 @@ resampled_depth <- resample(crop_depth, sst_mean_c, method = "bilinear")
 
 ## Workflow for Oysters
 ```{r}
-# variables for mix and max
+# variables for min and max
 min_sst <- 11
 max_sst <- 30
-
 
 # Reclassifying SST and depth data into suitable locations
 # SST reclassification matrix
@@ -133,23 +135,26 @@ rcl_depth <- matrix(
   )
 ```
 
+### Find Suitable Zones for Oysters
 ```{r}
-# reclassify
+# reclassify sst and depth to suitable zones
 zone_sst <- classify(sst_mean_c, rcl = rcl_sst)
 
 zone_depth <- classify(resampled_depth, rcl = rcl_depth)
 
-#combine them the two zones together
+# Combine to adhere to satisfy both sst and depth for suitable zones
 depth_sst_zones <- c(zone_sst, zone_depth)
 ```
 
 ```{r}
-# Find suitable zones for oysters
-suitable_zones <- lapp(depth_sst_zones, function(sst_data, depth_data) sst_data * depth_data)
+# Find suitable zones for oysters adhering to both conditions
+suitable_zones <- lapp(depth_sst_zones,
+ function(sst_data, depth_data) sst_data * depth_data)
 ```
 
+### Find suitable total area inside EEZ
 ```{r}
-# Determine suitable areas within EEZ
+# Converting sst data to match suitable zones
 sf::st_crs(eez_data)<- terra::crs(suitable_zones)
 ```
 
@@ -164,24 +169,26 @@ cell_size <- cellSize(suitable_zones, unit = "km", mask = TRUE)
 ```
 
 ```{r}
-# keep cell area only where suitable areas equals 1
+# Use only the cells with value 1 as suitable in the total area
 suitable_zmask <- mask(cell_size,suitable_zones, maskvalues = 0)
 ```
 
 ```{r}
-# use zonal function to sum masked result and eez raster
+# Select raster cells by suitable zpmes inside EEZ
 desired_zone <- zonal(suitable_zmask,eez_raster, fun = 'sum', na.rm = TRUE)
 ```
 
+### Create Map for Oyster Colored by EEZ Regions
 ```{r}
-# use tibble()
+# Create tibble
 z_tibble <- as_tibble(desired_zone)
 
+# Merge for desired zones to EEZ data
 map_1 <- left_join(eez_data, z_tibble, by = "rgn_id")
 ```
 
 ```{r}
-# Visualize EEZ
+# Visualize Oysters suitable regions
 tm_shape(map_1) +
     tm_basemap("OpenStreetMap") +
     tm_fill(
@@ -190,7 +197,7 @@ tm_shape(map_1) +
     )
 ```
 
-### Numerical Oyster Reprsentation by Exclusive Economic Zone
+### Numerical Oyster Reprsentation within EEZ Regions
 ```{r}
 # Create a table for area by region and suitability
 map_1 |>
@@ -212,9 +219,10 @@ map_1 |>
   kable_styling(latex_options = c("striped", "hold_position"))
 ```
 
-## Creat Function to Find Suitable Locations within EEZ West Coast Regions
+## Create Function to Find Suitable Locations within EEZ West Coast Regions
 
 ```{r}
+# Function
 eez_species <- function(
     min_sst,
     max_sst,
@@ -233,10 +241,10 @@ eez_species <- function(
     byrow = TRUE
     )
 
-# reclassify
+# Reclassify SST
     zone_sst <- classify(sst_mean_c, rcl = rcl_sst)
     
-# Depth reclassification matrix
+# Reclassify depth
     rcl_depth <- matrix(
     c(
       -Inf, max_depth, 0,
@@ -272,10 +280,10 @@ eez_species <- function(
 
     desired_zone <- zonal(suitable_zmask,eez_raster, fun = 'sum', na.rm = TRUE)
     
-# use tibble()
+# Create tibble
     z_tibble <- as_tibble(desired_zone)
     
-    
+# Merge for desired EEZ regions
     map <- left_join(eez_data, z_tibble, by = "rgn_id")
     
 # Visualize EEZ
@@ -296,7 +304,7 @@ eez_species <- function(
 }
 ```
 
-### EEZ Species Function: Finding Suitable Marine Aquaculture for Given Species
+## EEZ Species Function: Finding Suitable Marine Aquaculture for Given Species
 
 Utilizing the function created above, the map can be easily recreated for the desired blue mussel rather than recreate the lengthy process of manually inputing the inforamtion for sea surface temperature and depth, which leads to the reproduction of matching crs, masking, and more.
 
@@ -308,13 +316,13 @@ Simply Input into the funtion:
 
 - Oysters:
     * min_sst = 11°C
-    * min_sst = 30°C
+    * max_sst = 30°C
     * min_depth = 0 meters
     * max_depth = -70 meters
     * Species_name = Oysters
 - Blue mussels:
     * min_sst = 5°C
-    * min_sst = 20°C
+    * max_sst = 20°C
     * min_depth = 0 meters
     * max_depth = -60 meter
     * species_name = Blue Mussel
