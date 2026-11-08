@@ -16,7 +16,7 @@ Marine aquaculture have the potential to be a more sustainable option than the a
 
 # Assignment Description
 
-For this assignment, the Exclusive Economic Zone (EEZ) will be used to determine suitable regions throughout the west coast to develop marine aquaculture for several oyster species, as well as a species of choice, which was chosen to be the blue mussel (*Mytilus edulis*).
+For this assignment, the Exclusive Economic Zone (EEZ) will be used to determine suitable regions throughout the west coast to develop marine aquaculture for several oyster species, as well as a species of choice, which was chosen to be the blue mussel (*Mytilus edulis*). Blue mussels re eurythermal and well adapted to temperatures of 5–20 °C, with an upper thermal tolerance limit of about 29 °C for adults (Matoo et al., 2021).
 
 The main goal is to create a function that will input the following: minimum and maximum sea surface temp, minimum and maximum depth, and the species name. The output will be a map of the EEZ regions colored by the amount of suitable areas for the selected species.
 
@@ -188,13 +188,30 @@ map_1 <- left_join(eez_data, z_tibble, by = "rgn_id")
 ```
 
 ```{r}
-# Visualize Oysters suitable regions
-tm_shape(map_1) +
-    tm_basemap("OpenStreetMap") +
-    tm_fill(
-        fill = "area",
-        fill.legend = tm_legend(title = "Suitable Area")
+# Creating a color palette to differentiate the regions
+color_palette <- c("#d0f0f0", "#5fb3c7", "#1f78a8", "#08306b")
+```
+
+```{r}
+# Visualize oyster suitable area by EEZ region
+tm_basemap("OpenStreetMap") +
+  tm_shape(map_1) +
+  tm_polygons(
+    fill = "area",
+    fill_alpha = 0.7,
+    col = "grey30",
+    fill.scale = tm_scale_continuous(values = color_palette),
+    fill.legend = tm_legend(
+      title = "Suitable Area (km²)",
+      position = tm_pos_out("right", "center")
     )
+  ) +
+  tm_text(text = "rgn_key", size = 0.7, col = "grey20") +
+  tm_compass(type = "8star",
+        size = 2, position = c("right", "top")) +
+  tm_scalebar(position = c("left", "bottom"), size = 5) +
+  tm_options(component.autoscale = FALSE) +
+  tm_title("Suitable Oyster Aquaculture\nin the West Coast by EEZ", size = 1)
 ```
 
 ### Numerical Oyster Reprsentation within EEZ Regions
@@ -219,7 +236,7 @@ map_1 |>
   kable_styling(latex_options = c("striped", "hold_position"))
 ```
 
-## Create Function to Find Suitable Locations within EEZ West Coast Regions
+# Function: Find Suitable Area for Marine Species
 
 ```{r}
 # Function
@@ -261,7 +278,8 @@ eez_species <- function(
     depth_sst_zones <- c(zone_sst, zone_depth)
     
 # Find suitable zones
-    suitable_zones <- lapp(depth_sst_zones, function(sst_data, depth_data) sst_data * depth_data)
+    suitable_zones <- lapp(depth_sst_zones, 
+    function(sst_data, depth_data) sst_data * depth_data)
     
 # Determine suitable zones inside EEZ
     sf::st_crs(eez_data)<- terra::crs(suitable_zones)
@@ -285,30 +303,48 @@ eez_species <- function(
     
 # Merge for desired EEZ regions
     map <- left_join(eez_data, z_tibble, by = "rgn_id")
-    
+
+# Create color palette   
+   color_palette <- c("#d0f0f0", "#5fb3c7", "#1f78a8", "#08306b")
+
 # Visualize EEZ
-    tm_shape(map) +
-        tm_basemap("OpenStreetMap") +
-        tm_fill(
-            fill = "area",
-            fill.legend = tm_legend(title = "Suitable Area (km^2)")
-            ) +
-                tm_borders() +
-                tmap_options(component.autoscale = FALSE) +
-                tm_title(
-                 paste(
-                "Suitable",
-                species_name,
-                "Area by Exclusive Economic Zone (EEZ)"    
-                ))
+   map_species <- tm_basemap("OpenStreetMap") +
+  tm_shape(map) +
+  tm_polygons(
+    fill = "area",
+    fill_alpha = 0.85,
+    col = "grey30",
+    fill.scale = tm_scale_continuous(values = color_palette),
+    fill.legend = tm_legend(
+      title = "Suitable Area (km²)",
+      position = tm_pos_out("right", "center")
+    )
+  ) +
+  tm_text(text = "rgn_key", size = 0.7, col = "grey20") +
+  tm_compass(type = "8star", size = 2, position = c("right", "top")) +
+  tm_scalebar(position = c("left", "bottom")) +
+  tm_options(component.autoscale = FALSE) +
+  tm_title(paste0("Suitable ", species_name,
+  "Aquaculture\nin the West Coast by EEZ"), size = 1)
+
+# Create a table
+
+table <- map |> 
+  select(rgn_id, area, area_km2) |>
+  arrange(desc(area)) |>
+  mutate(pct_suitable = area / area_km2 * 100) |>
+  st_drop_geometry()
+
+return(list(map_species, table))
+
 }
 ```
 
-## EEZ Species Function: Finding Suitable Marine Aquaculture for Given Species
+## EEZ Species Function: Blue Mussel
 
-Utilizing the function created above, the map can be easily recreated for the desired blue mussel rather than recreate the lengthy process of manually inputing the inforamtion for sea surface temperature and depth, which leads to the reproduction of matching crs, masking, and more.
+Utilizing the function created above, a map, as well as a table with the total suitable area depicted numerically, can be easily recreated for the desired blue mussel rather than recreate the lengthy process of manually inputing the inforamtion for sea surface temperature and depth.
 
-The function is called after EEZ species and used as:
+The function is called after EEZ species and used as shown:
 
 - `eez_species(min_sst, max_sst, min_depth, max_depth, species_name)`
 
@@ -331,11 +367,70 @@ Simply Input into the funtion:
     * map of EEZ regions colored by amount of suitable area
 
 ```{r}
-# Create a suitable EEZ map for oysters using function
-eez_species(11, 30, 0, -70, 'Oysters')
+#| warning: false
+#| fig-width: 11
+#| fig-height: 9
+# Verify function by using oysters
+oyster <- eez_species(11, 30, 0, -70, 'Oysters')
+oyster[[1]]
+```
+
+Figure 1: 
+
+Map of the West Coast showcasing the suitable areas that meet several oyster's sea surface temperature and depth for aquaculture possibilites based on Exclusive Economic Zones.
+
+```{r}
+#| tbl-cap: Table depicting the total area (Km^2) by EEZ regions in the West Coast for several oyster species.
+# Make a table for blue mussel
+knitr::kable(oyster[[2]],
+digits = 2, col.names = c("EEZ Region",
+      " Suitable Area (km²)",
+      "Total EEZ Area (km²)",
+      "Suitable (%)"))
 ```
 
 ```{r}
-# Create a suitable EEZ map for mussles using function
-eez_species(5, 20, 0, -60, 'Blue Mussel')
+#| warning: false
+#| fig-width: 11
+#| fig-height: 9
+# Use function for blue mussel
+blue_mussels <- eez_species(5, 20, 0, -60, 'Blue Mussel')
+blue_mussels[[1]]
 ```
+
+Figure 2: 
+
+Map of the West Coast showcasing the suitable areas that meet the Blue Mussel's sea surface temperature and depth for aquaculture possibilites based on Exclusive Economic Zones.
+
+```{r}
+#| tbl-cap: Table depicting the total area (Km^2) by EEZ regions in the West Coast for Blue Mussel species.
+# Make a table for blue mussel
+knitr::kable(blue_mussels[[2]],
+digits = 2, col.names = c("EEZ Region",
+      " Suitable Area (km²)",
+      "Total EEZ Area (km²)",
+      "Suitable (%)"))
+```
+
+# Reflection
+
+Using the Exclusive Economic Zones to map out suitable areas for marine species that have a high potential for aquaculture development in the west coast of the United States. The conditions for the species were determined by using the sea surface temperature and depth below, oyster with a range of 11-30°C and maximum depth of 70 meters below sea level, and blue mussels with a range of 5-20°C and a maximum depth of 60 meters.
+
+Once the maps were created, once by manually coding and then again utilizing the function, the area for oyster farming was found to be in Central California with a total of 4,373.6 km^2 and the lower bound being in Northern California with 323.9 km^2.
+
+As for the second species, the Blue Mussel's information was inputted into the function and both a map of the suitable locations were generated as well as a table. Both depict the same information with the suitable location being in Washington with a total of 6545.8 km^2 and the lowest being in Northern California with a total of 2410.1 km^2.
+
+# Data Citations
+
+"Blue Frontiers: Managing the Environmental Costs of Aquaculture", S. J. Hall, A. Delaporte, M. J. Phillips, M. Beveridge, and M. O’Keefe, [available here](https://digitalarchive.worldfishcenter.org/items/2d506b5a-74ca-4a3c-aa20-b2fa56feeb29)
+
+"Daily Global 5km Satellite Sea Surface Temperature Anomaly (Version 3.1)", NOAA Coral Reef Watch, 2018, [available here](https://coralreefwatch.noaa.gov/product/5km/index_5km_ssta.php) [Accessed: Nov. 7, 2026]
+
+"GEBCO_2022 Grid", GEBCO Compilation Group, British Oceanographic Data Centre, 2022, [available here](https://doi.org/10.5285/e0f0bb80-ab44-2739-e053-6c86abc0289c) [Accessed: Nov. 7, 2026]
+
+"Maritime Boundaries and Exclusive Economic Zones", Flanders Marine Institute, MarineRegions.org, 2026, [available here](https://www.marineregions.org/eez.php) [Accessed: Nov. 7, 2026]
+
+"Mytilus edulis, Blue Mussel", M. L. D. Palomares and D. Pauly (Eds.), SeaLifeBase, [available here](https://www.sealifebase.ca/summary/Mytilus-edulis.html) [Accessed: Nov. 7, 2026]
+
+"Temperature but not ocean acidification affects energy metabolism and enzyme activities in the blue mussel, Mytilus edulis", O. B. Matoo, G. Lannig, C. Bock, and I. M. Sokolova, Ecology and Evolution, 2021, [available here](https://doi.org/10.1002/ece3.7289) [Accessed: Nov. 7, 2026]
+
