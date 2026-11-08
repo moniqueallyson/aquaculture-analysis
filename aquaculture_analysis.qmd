@@ -325,7 +325,7 @@ eez_species <- function(
   tm_scalebar(position = c("left", "bottom")) +
   tm_options(component.autoscale = FALSE) +
   tm_title(paste0("Suitable ", species_name,
-  "Aquaculture\nin the West Coast by EEZ"), size = 1)
+  " Areas by EEZ in West"), size = 1)
 
 # Create a table
 
